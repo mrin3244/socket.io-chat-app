@@ -4,7 +4,7 @@ var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io').listen(server);
 
-var nicknames = [];
+var users  = {};
 
 server.listen(3000);
 
@@ -15,12 +15,12 @@ app.get('/', function(req, res){
 // receive the event on the server side 
 io.sockets.on('connection', function(socket){
     socket.on('new user', function(data, callback){
-        if(nicknames.indexOf(data) != -1){
+        if(data in users){
             callback(false);
         } else{
             callback(true);
             socket.nickname = data;
-            nicknames.push(socket.nickname);
+            users[socket.nickname] = socket;
             updateNicknames();
             
         }
@@ -28,20 +28,39 @@ io.sockets.on('connection', function(socket){
     });
 
     function updateNicknames(){
-        //console.log(nicknames);
-        io.sockets.emit('usernames', nicknames);
+        io.sockets.emit('usernames', Object.keys(users));
     }
-    socket.on('send message', function(data){
-        // message send to all users
-        io.sockets.emit('new message', {msg: data, nick: socket.nickname});
-        // message send to all other users except me
-        //socket.broadcast.emit('new message', data);
+    socket.on('send message', function(data, callback){
+        var msg = data.trim();
+        if(msg.substr(0,3) === '/w '){
+            // wishper message
+            msg = msg.substr(3);
+            var index = msg.indexOf(' ');
+            if(index !== -1){
+                var name = msg.substr(0, index);
+                var msg = msg.substr(index + 1);
+                if(name in users){
+                    users[name].emit('wishper', {msg: msg, nick: socket.nickname});
+                    //console.log('wishper');
+                } else {
+                    callback('error : enter a valid user');
+                }
+                
+            } else{
+                // did not have any msg
+                callback('error : please enter a message');
+            }
+            
+
+        } else {
+            io.sockets.emit('new message', {msg: msg, nick: socket.nickname});
+        }
     });
 
     // when close the chat window
     socket.on('disconnect', function(data){
         if(!socket.nickname) return;
-        nicknames.splice(nicknames.indexOf(socket.nickname), 1);
+        delete users[socket.nickname];
         updateNicknames();
     });
 
