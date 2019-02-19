@@ -3,10 +3,30 @@ var app = express();
 
 var server = require('http').createServer(app);
 var io = require('socket.io').listen(server);
+const mongoose = require('mongoose');
 
 var users  = {};
 
 server.listen(3000);
+
+
+
+//mongoose connect to mongodb database 
+mongoose.connect("mongodb://localhost:27017/mydb",  {useNewUrlParser : true }, function(err){
+    if(err){
+        console.log(err)
+    }else {
+        console.log('database connected')
+    }
+});
+
+var chatSchema = mongoose.Schema({
+    nick : String,
+    msg : String,
+    created: {type: Date, default: Date.now}
+});
+
+var Chat = mongoose.model('chatmessage', chatSchema);
 
 app.get('/', function(req, res){
     res.sendFile(__dirname + '/index.html');
@@ -14,6 +34,13 @@ app.get('/', function(req, res){
 
 // receive the event on the server side 
 io.sockets.on('connection', function(socket){
+    // msg from database
+    Chat.find({}).sort({_id:-1}).limit(10).exec(function(err, docs){
+        if(err) throw err;
+        //console.log('sending old messages');
+        socket.emit('load old msg', docs);
+    });
+
     socket.on('new user', function(data, callback){
         if(data in users){
             callback(false);
@@ -37,6 +64,7 @@ io.sockets.on('connection', function(socket){
             msg = msg.substr(3);
             var index = msg.indexOf(' ');
             if(index !== -1){
+                // private message not store in database
                 var name = msg.substr(0, index);
                 var msg = msg.substr(index + 1);
                 if(name in users){
@@ -53,7 +81,11 @@ io.sockets.on('connection', function(socket){
             
 
         } else {
-            io.sockets.emit('new message', {msg: msg, nick: socket.nickname});
+            var newMsg = new Chat({msg: msg, nick: socket.nickname});
+            newMsg.save(function(err){
+                if(err) throw err;
+                io.sockets.emit('new message', {msg: msg, nick: socket.nickname});
+            });
         }
     });
 
