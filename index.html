@@ -5,14 +5,37 @@
             #chat{
                 height: 500px;
             }
+
+            #contentWrap{
+                display: none;
+            }
+            #chatWrap{
+                float:left;
+                border: 1px #000 solid;
+            }
+            
         </style>
     </head>
     <body>
-        <div id="chat"></div>
-        <form id="send-message">
-            <input type="text" id="message">
-            <input type="submit" value="submit">
-        </form>
+        <div id="nickwrap">
+            <p>Enter a username</p>
+            <p id="nickError"></p>
+            <form id="setNick">
+                <input type="text" id="nickname">
+                <input type="submit" value="submit">
+            </form>
+        </div>
+        <div id="contentWrap">
+            <div id="chatWrap">
+                <div id="chat"></div>
+                <form id="send-message">
+                    <input type="text" id="message">
+                    <input type="submit" value="submit">
+                </form>
+            </div>
+            <div id="users"></div>
+        </div>
+        
     </body>
 
     <script src="https://code.jquery.com/jquery-latest.min.js"></script>
@@ -22,9 +45,37 @@
         // jquery function
         jQuery(function( $ ){
             var socket = io.connect(); // give it to us javascript insert into index.html page
+            var $users = $('#users');
+            var $nickForm = $('#setNick');
+            var $nickError = $('#nickError');
+            var $nickname = $('#nickname');
             var $messageForm = $('#send-message');
             var $messageInput = $('#message');
             var $chat = $('#chat');
+
+            $nickForm.submit(function(e){
+                e.preventDefault();
+                // go to server check the user is exit or not
+                socket.emit('new user', $nickname.val(), function(data){
+                    if(data){
+                        $('#nickwrap').hide();
+                        $('#contentWrap').show();
+
+                    } else{
+                        $nickError.html('username already use');
+                    }
+                });
+                $nickname.val(''); 
+            });
+
+            socket.on('usernames', function(data){
+                //console.log(data);
+                var html = '';
+                for(i=0; i<data.length; i++){
+                    html += data[i] + '</br>'
+                }
+                $users.html(html);
+            });
 
             $messageForm.submit(function(e){
                 e.preventDefault();  // after submit the form don't refrace the page
@@ -35,7 +86,8 @@
             //receive message form server side
             socket.on('new message', function(data){
                 // display the message
-                $chat.append(data + '</br>');
+                //$chat.append(data + '</br>');
+                $chat.append('<b>' + data.nick+' : </b>'+ data.msg + '</br>');
             });
 
         });
